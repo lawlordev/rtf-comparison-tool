@@ -14,6 +14,6 @@ if [ -z "$RSCRIPT" ]; then
   echo "Could not find R. Install it from https://cran.r-project.org and try again."
   read -n 1 -s -r -p "Press any key to close..."; echo; exit 2
 fi
-"$RSCRIPT" "$ROOT/generate_test_data.R"
+"$RSCRIPT" "$ROOT/R/generate_test_data.R"
 echo
 read -n 1 -s -r -p "Press any key to close..."; echo

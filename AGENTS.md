@@ -22,7 +22,7 @@ cell text, normalise it, and compare the normalised content positionally.** The
 
 ## 2. Golden invariants — do not break these
 
-Run `Rscript run_tests.R` after any change. It must report **119 passed, 0 failed**. In
+Run `Rscript R/run_tests.R` after any change. It must report **119 passed, 0 failed**. In
 particular:
 
 - **base vs reformatted → EQUIVALENT** (0 differences) — content is compared, not markup.
@@ -41,14 +41,15 @@ particular:
 ## 3. Project layout
 
 ```
-compare_rtf.R          Engine (parse/normalize/compare/report) + CLI. The CLI auto-runs
+R/                     All R scripts live here:
+  compare_rtf.R        Engine (parse/normalize/compare/report) + CLI. The CLI auto-runs
                        only when this file is the invoked script (.is_main guard), so
                        sourcing it never triggers the CLI.
-run_compare_paths.R    Interactive runner — paste two paths (default compare launcher).
-run_compare.R          Interactive runner — native file-picker dialogs (the "2b" option).
-install_packages.R     Idempotent installer for the 5 CRAN packages.
-generate_test_data.R   Pure-R synthetic test-data generator (base/reformatted/changed).
-run_tests.R            Runs the testthat suite; exit 0 all-pass, 1 otherwise.
+  run_compare_paths.R  Interactive runner — paste two paths (default compare launcher).
+  run_compare.R        Interactive runner — native file-picker dialogs (the "2b" option).
+  install_packages.R   Idempotent installer for the 5 CRAN packages.
+  generate_test_data.R Pure-R synthetic test-data generator (base/reformatted/changed).
+  run_tests.R          Runs the testthat suite; exit 0 all-pass, 1 otherwise.
 windows/  macos/       Double-click launchers (.bat / .command) + Rscript finders.
 examples/              Provided clinical RTF files (canonical integration fixtures).
 tests/testthat/        Unit + integration tests (test-01..10) and small fixtures/.
@@ -82,7 +83,7 @@ cross-check), `testthat` (tests), `optparse` (CLI).
 
 ### Install the R packages (either OS)
 ```
-Rscript install_packages.R
+Rscript R/install_packages.R
 ```
 Idempotent; installs only what's missing and prints a status line per package. Or
 double-click `windows\1-Install-Packages.bat` / `macos/1-Install-Packages.command`.
@@ -93,13 +94,13 @@ double-click `windows\1-Install-Packages.bat` / `macos/1-Install-Packages.comman
 
 ```bash
 # compare by paths (interactive: prompts for two paths, then offers to export):
-Rscript run_compare_paths.R
+Rscript R/run_compare_paths.R
 # compare directly (prints result; writes only if you pass --report/--csv):
-Rscript compare_rtf.R --file1 a.rtf --file2 b.rtf [--report out.txt] [--csv diffs.csv]
+Rscript R/compare_rtf.R --file1 a.rtf --file2 b.rtf [--report out.txt] [--csv diffs.csv]
 # run the whole test suite (expect "119 passed"):
-Rscript run_tests.R
+Rscript R/run_tests.R
 # generate synthetic test files (raise --rows for a large performance file):
-Rscript generate_test_data.R --out examples/generated [--rows N] [--seed S]
+Rscript R/generate_test_data.R --out examples/generated [--rows N] [--seed S]
 ```
 Point-and-click equivalents are in `macos/` (`2-…` paths, `2b-…` file picker, `3-…` tests,
 `4-…` generate). The `.command` files must be executable (`chmod +x macos/*.command`); on
@@ -108,8 +109,8 @@ first launch macOS Gatekeeper may require **right-click → Open → Open** (no 
 ## 6. Doing things — Windows
 
 ```bat
-Rscript compare_rtf.R --file1 a.rtf --file2 b.rtf
-Rscript run_tests.R
+Rscript R/compare_rtf.R --file1 a.rtf --file2 b.rtf
+Rscript R/run_tests.R
 ```
 Point-and-click: `windows\2-Compare-RTF-Files.bat` (paste paths), `2b-…` (file picker),
 `1-Install-Packages.bat`, `3-Run-Tests.bat`, `4-Generate-Test-Data.bat`.
@@ -117,8 +118,8 @@ Point-and-click: `windows\2-Compare-RTF-Files.bat` (paste paths), `2b-…` (file
 - **Avoid the "Run anyway" / admin prompt:** files arrive "blocked"; clear it without admin
   by right-clicking the **ZIP → Properties → Unblock → OK** *before* extracting.
 - **If the company blocks `.bat` entirely:** drive everything from the R console (R is
-  installed and allowed): `source("C:/path/to/run_compare_paths.R")`, or
-  `source("C:/path/to/install_packages.R")`. Use forward slashes in the `source()` line;
+  installed and allowed): `source("C:/path/to/R/run_compare_paths.R")`, or
+  `source("C:/path/to/R/install_packages.R")`. Use forward slashes in the `source()` line;
   the paths pasted at the prompts may use normal backslashes.
 
 ---
@@ -146,7 +147,7 @@ Point-and-click: `windows\2-Compare-RTF-Files.bat` (paste paths), `2b-…` (file
 
 ## 8. Definition of done for a change
 
-1. `Rscript run_tests.R` → **119 passed, 0 failed** (or more, if you added tests).
+1. `Rscript R/run_tests.R` → **119 passed, 0 failed** (or more, if you added tests).
 2. New behaviour has a test; new options are documented in `README.md` and (if user-facing)
    the `START HERE` files.
 3. No stray output files committed (`RTF_comparison_*`, `.DS_Store`, `examples/generated/`

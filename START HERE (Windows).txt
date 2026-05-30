@@ -83,11 +83,11 @@ WHAT YOU NEED
      2. First time only, install the packages - paste this one line
         (use FORWARD slashes "/", and your real folder location):
 
-           source("C:/Users/YOU/Desktop/rtf-comparison-tool/install_packages.R")
+           source("C:/Users/YOU/Desktop/rtf-comparison-tool/R/install_packages.R")
 
      3. To compare, paste this one line (again, forward slashes):
 
-           source("C:/Users/YOU/Desktop/rtf-comparison-tool/run_compare_paths.R")
+           source("C:/Users/YOU/Desktop/rtf-comparison-tool/R/run_compare_paths.R")
 
         ...then paste the two file paths at the prompts (here you can use
         normal backslash paths). It saves the same .txt and .csv reports.

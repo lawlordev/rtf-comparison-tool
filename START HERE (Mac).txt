@@ -81,8 +81,8 @@ WHAT YOU NEED
   If you'd rather not use the launchers, open R (or RStudio) and run, with
   your real folder location and forward slashes:
 
-        source("/Users/you/Downloads/rtf-comparison-tool/install_packages.R")   # once
-        source("/Users/you/Downloads/rtf-comparison-tool/run_compare_paths.R")  # to compare
+        source("/Users/you/Downloads/rtf-comparison-tool/R/install_packages.R")   # once
+        source("/Users/you/Downloads/rtf-comparison-tool/R/run_compare_paths.R")  # to compare
 
   ...then paste the two file paths at the prompts.
 

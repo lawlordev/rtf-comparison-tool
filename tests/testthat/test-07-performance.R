@@ -4,7 +4,7 @@
 # 50000) for a heavier check.
 
 test_that("a large file compares in reasonable time and correctly", {
-  source(file.path(RTF_ROOT, "generate_test_data.R"), local = TRUE)
+  source(file.path(RTF_ROOT, "R", "generate_test_data.R"), local = TRUE)
   n <- as.integer(Sys.getenv("RTF_PERF_ROWS", "3000"))
   d <- file.path(tempdir(), paste0("perf_", n)); dir.create(d, showWarnings = FALSE)
   files <- generate_test_data(d, n_filler = n, verbose = FALSE)

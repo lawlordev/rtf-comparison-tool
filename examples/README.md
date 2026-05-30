@@ -64,7 +64,7 @@ These three files are the **canonical integration fixtures** and are kept as-is.
 To make your **own** equivalent test files (same contract: base↔reformatted EQUIVALENT,
 base↔changed = 7 differences) without needing Python, use the bundled R generator
 `generate_test_data.R` — double-click `4-Generate-Test-Data` in `windows/` or `macos/`, or
-run `Rscript generate_test_data.R --out <folder> --rows <n>`. Raise `--rows` to make larger
+run `Rscript R/generate_test_data.R --out <folder> --rows <n>`. Raise `--rows` to make larger
 files (e.g. for the performance check); the seven edits are applied in place so each produces
 exactly one `VALUE_DIFF`. Adding or removing a row mid-table will (correctly) cascade into many
 positional differences for every following row.

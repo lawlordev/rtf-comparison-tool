@@ -284,7 +284,7 @@ if (.is_main()) {
 
   script_dir <- dirname(sub("^--file=", "",
                             commandArgs(FALSE)[grepl("^--file=", commandArgs(FALSE))][1]))
-  default_out <- file.path(script_dir, "examples", "generated")
+  default_out <- file.path(dirname(script_dir), "examples", "generated")  # repo-root/examples
 
   out_dir  <- getarg("--out", NA_character_)
   n_filler <- as.integer(getarg("--rows", "60"))

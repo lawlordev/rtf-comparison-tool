@@ -1,7 +1,7 @@
 # M5 -- report writing, CSV output, the CLI and its exit codes.
 
 rscript <- file.path(R.home("bin"), "Rscript")
-engine  <- file.path(RTF_ROOT, "compare_rtf.R")
+engine  <- file.path(RTF_ROOT, "R", "compare_rtf.R")
 
 run_cli <- function(args) {
   out <- suppressWarnings(system2(rscript, c(engine, args),

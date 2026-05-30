@@ -25,8 +25,9 @@
 }
 script_dir <- dirname(.this_file())
 engine <- file.path(script_dir, "compare_rtf.R")
+if (!file.exists(engine)) engine <- file.path(getwd(), "R", "compare_rtf.R")
 if (!file.exists(engine)) engine <- file.path(getwd(), "compare_rtf.R")
-if (!file.exists(engine)) stop("Cannot find compare_rtf.R next to run_compare_paths.R.", call. = FALSE)
+if (!file.exists(engine)) stop("Cannot find compare_rtf.R (expected in the R/ folder).", call. = FALSE)
 source(engine)
 
 # --- read a line of input (works in the R console and under Rscript) ---------

@@ -83,7 +83,7 @@ compare another pair. Works with any two RTF files on the machine.
 > downloaded files are "blocked". Clear it yourself without admin: right-click the **ZIP** →
 > **Properties** → tick **Unblock** → **OK**, *then* extract. If your company blocks `.bat`
 > files entirely, drive the tool from the R console instead (no admin, always works):
-> `source("C:/path/to/rtf-comparison-tool/run_compare_paths.R")` then paste the two paths.
+> `source("C:/path/to/rtf-comparison-tool/R/run_compare_paths.R")` then paste the two paths.
 > See `START HERE (Windows).txt` for the full no-admin walkthrough.
 
 > **Mac, first run only:** macOS may say the file is "from an unidentified developer."
@@ -141,7 +141,7 @@ and footnotes are all numbered in the order they appear; non-table lines are a s
 For power users, pipelines, or batch QC. From the project folder:
 
 ```bash
-Rscript compare_rtf.R --file1 path/to/base.rtf --file2 path/to/comparison.rtf
+Rscript R/compare_rtf.R --file1 path/to/base.rtf --file2 path/to/comparison.rtf
 ```
 
 The comparison result always prints to the screen; **nothing is written to disk unless you
@@ -149,7 +149,7 @@ ask**. Export on demand by naming where each file should go — `--report` for t
 `--csv` for the differences:
 
 ```bash
-Rscript compare_rtf.R \
+Rscript R/compare_rtf.R \
   --file1 base.rtf --file2 comparison.rtf \
   --report result.txt --csv diffs.csv --diffdf
 ```
@@ -162,7 +162,7 @@ Rscript compare_rtf.R \
 | `1` | One or more **differences** found. |
 | `2` | **Error** (file not found, not a valid RTF, bad arguments). |
 
-Run `Rscript compare_rtf.R --help` for the full option list.
+Run `Rscript R/compare_rtf.R --help` for the full option list.
 
 ---
 
@@ -203,9 +203,9 @@ prints a self-check:
 **Command line** (with control over size and seed):
 
 ```bash
-Rscript generate_test_data.R --out my_test_files            # default ~70 rows
-Rscript generate_test_data.R --out big_files --rows 50000   # large file for speed testing
-Rscript generate_test_data.R --out repro --seed 12345       # reproducible
+Rscript R/generate_test_data.R --out my_test_files            # default ~70 rows
+Rscript R/generate_test_data.R --out big_files --rows 50000   # large file for speed testing
+Rscript R/generate_test_data.R --out repro --seed 12345       # reproducible
 ```
 
 After generating, compare `base` against `reformatted` (expect EQUIVALENT) and against
@@ -224,7 +224,7 @@ outputs (see `tests/real_world/`).
 **Command line:**
 
 ```bash
-Rscript run_tests.R
+Rscript R/run_tests.R
 ```
 
 You should see `RESULT: 119 passed, 0 failed`. The suite covers parsing, normalisation,
@@ -303,12 +303,13 @@ rtf-comparison-tool/
 ├── START HERE (Windows).txt   ← plain-text quick start for the client (Windows)
 ├── START HERE (Mac).txt       ← plain-text quick start for the client (macOS)
 ├── AGENTS.md                  ← guide for developers / AI agents working on the repo
-├── compare_rtf.R              ← the comparison engine + command-line interface
-├── run_compare_paths.R        ← compare by pasting two file paths (default)
-├── run_compare.R              ← point-and-click runner (file pickers, the "2b" option)
-├── install_packages.R         ← one-time package installer
-├── generate_test_data.R       ← synthetic test-file generator (pure R)
-├── run_tests.R                ← runs the automated test suite
+├── R/                         ← all the R scripts
+│   ├── compare_rtf.R          ← the comparison engine + command-line interface
+│   ├── run_compare_paths.R    ← compare by pasting two file paths (default)
+│   ├── run_compare.R          ← point-and-click runner (file pickers, the "2b" option)
+│   ├── install_packages.R     ← one-time package installer
+│   ├── generate_test_data.R   ← synthetic test-file generator (pure R)
+│   └── run_tests.R            ← runs the automated test suite
 ├── windows/                   ← double-click launchers for Windows (.bat)
 ├── macos/                     ← double-click launchers for macOS (.command)
 ├── examples/                  ← provided clinical RTF files + their description

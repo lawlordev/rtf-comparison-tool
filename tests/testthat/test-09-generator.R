@@ -1,7 +1,7 @@
 # Generator -- the R test-data generator honours the documented contract.
 
 test_that("generated base vs reformatted is EQUIVALENT and base vs changed is 7 diffs", {
-  source(file.path(RTF_ROOT, "generate_test_data.R"), local = TRUE)
+  source(file.path(RTF_ROOT, "R", "generate_test_data.R"), local = TRUE)
   d <- file.path(tempdir(), "gen_contract"); dir.create(d, showWarnings = FALSE)
   files <- generate_test_data(d, n_filler = 12L, verbose = FALSE)
   expect_true(all(file.exists(files)))
@@ -14,7 +14,7 @@ test_that("generated base vs reformatted is EQUIVALENT and base vs changed is 7 
 })
 
 test_that("generated files contain the required special characters and footnotes", {
-  source(file.path(RTF_ROOT, "generate_test_data.R"), local = TRUE)
+  source(file.path(RTF_ROOT, "R", "generate_test_data.R"), local = TRUE)
   d <- file.path(tempdir(), "gen_chars"); dir.create(d, showWarnings = FALSE)
   files <- generate_test_data(d, n_filler = 6L, verbose = FALSE)
   v <- parse_rtf(files["base"])$raw_value
@@ -28,7 +28,7 @@ test_that("generated files contain the required special characters and footnotes
 })
 
 test_that("the generator is deterministic for a fixed seed", {
-  source(file.path(RTF_ROOT, "generate_test_data.R"), local = TRUE)
+  source(file.path(RTF_ROOT, "R", "generate_test_data.R"), local = TRUE)
   d1 <- file.path(tempdir(), "gen_det1"); dir.create(d1, showWarnings = FALSE)
   d2 <- file.path(tempdir(), "gen_det2"); dir.create(d2, showWarnings = FALSE)
   f1 <- generate_test_data(d1, n_filler = 8L, seed = 123L, verbose = FALSE)

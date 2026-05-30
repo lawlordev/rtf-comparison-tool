@@ -7,7 +7,7 @@ REM ===========================================================================
 setlocal
 call "%~dp0_find_rscript.bat"
 if not defined RSCRIPT goto :norscript
-"%RSCRIPT%" "%~dp0..\run_compare.R"
+"%RSCRIPT%" "%~dp0..\R\run_compare.R"
 echo.
 pause
 exit /b %ERRORLEVEL%

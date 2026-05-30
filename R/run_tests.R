@@ -4,7 +4,7 @@
 # =============================================================================
 # Exercises every stage of the tool against small hand-built fixtures and the
 # large provided clinical files. Exit code 0 = all tests passed, 1 = failures.
-# Double-click a launcher in windows/ or macos/, or run: Rscript run_tests.R
+# Double-click a launcher in windows/ or macos/, or run: Rscript R/run_tests.R
 # =============================================================================
 
 .this_file <- function() {
@@ -13,16 +13,17 @@
   if (length(m)) return(normalizePath(sub("^--file=", "", m[[1]])))
   getwd()
 }
-root <- dirname(.this_file())
+script_dir <- dirname(.this_file())   # the R/ folder
+root       <- dirname(script_dir)     # repo root (holds tests/, examples/)
 
 if (!requireNamespace("testthat", quietly = TRUE)) {
-  stop("Package 'testthat' is not installed. Please run install_packages.R first.",
+  stop("Package 'testthat' is not installed. Please run R/install_packages.R first.",
        call. = FALSE)
 }
 
 Sys.setenv(RTF_TOOL_ROOT = root)
 suppressMessages(library(testthat))
-source(file.path(root, "compare_rtf.R"))
+source(file.path(script_dir, "compare_rtf.R"))
 
 cat("============================================================\n")
 cat("RTF Comparison Tool - automated test suite\n")

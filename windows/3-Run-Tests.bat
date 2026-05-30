@@ -5,7 +5,7 @@ REM ===========================================================================
 setlocal
 call "%~dp0_find_rscript.bat"
 if not defined RSCRIPT goto :norscript
-"%RSCRIPT%" "%~dp0..\run_tests.R"
+"%RSCRIPT%" "%~dp0..\R\run_tests.R"
 echo.
 pause
 exit /b %ERRORLEVEL%

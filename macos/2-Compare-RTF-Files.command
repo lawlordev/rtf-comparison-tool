@@ -16,6 +16,6 @@ if [ -z "$RSCRIPT" ]; then
   echo "Could not find R. Install it from https://cran.r-project.org and try again."
   read -n 1 -s -r -p "Press any key to close..."; echo; exit 2
 fi
-"$RSCRIPT" "$ROOT/run_compare_paths.R"
+"$RSCRIPT" "$ROOT/R/run_compare_paths.R"
 echo
 read -n 1 -s -r -p "Press any key to close..."; echo
