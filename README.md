@@ -1,0 +1,321 @@
+# RTF Comparison Tool
+
+Compare two RTF files and report exactly how their **content** differs — ignoring
+cosmetic formatting (fonts, colours, column widths, spacing). Built in **R** for
+clinical QC of TLF (Tables, Listings, Figures) outputs, but general enough for any
+tabular RTF.
+
+> **Why not just `diff` the files?** RTF is markup. Two RTF files that render the
+> *identical* table can have completely different bytes (font tables, control-word
+> order, escape encodings). A raw text `diff` produces thousands of meaningless
+> differences. This tool extracts the **displayed cell content**, normalises it, and
+> compares **cell by cell**, e.g. *"Row 10, Col 2: file 1 = `45 (21.4%)`, file 2 =
+> `46 (21.9%)`"*.
+
+---
+
+## Contents
+
+- [What you need](#what-you-need)
+- [Quick start — the easy way (no typing)](#quick-start--the-easy-way-no-typing)
+- [What the report tells you](#what-the-report-tells-you)
+- [Command-line use (optional)](#command-line-use-optional)
+- [Options and defaults](#options-and-defaults)
+- [Generate your own test data](#generate-your-own-test-data)
+- [Run the test suite](#run-the-test-suite)
+- [How it works](#how-it-works)
+- [What has been validated](#what-has-been-validated)
+- [Known limitations](#known-limitations)
+- [Repository layout](#repository-layout)
+
+---
+
+## What you need
+
+- **R** (version 4.x), already installed. Download: <https://cran.r-project.org>.
+  No programming knowledge is required to *use* the tool.
+- A one-time install of five R packages (handled for you in Step 1 below):
+  `striprtf`, `diffdf`, `data.table`, `testthat`, `optparse`.
+- The package install needs an internet connection the first time only.
+
+---
+
+## Quick start
+
+Use the launcher folder for your computer — `windows\` on Windows, `macos/` on a Mac.
+Double-click to set up once; then, to compare, you paste two file paths (or use the
+file-picker alternative, `2b-…`).
+
+### Step 1 — install the packages (once)
+
+| Windows | Mac |
+|---|---|
+| Double-click **`windows\1-Install-Packages.bat`** | Double-click **`macos/1-Install-Packages.command`** |
+
+A window opens, installs the five packages, prints **`SUCCESS`**, and waits for a key
+press. You only ever do this once per computer.
+
+### Step 2 — compare two files (every time)
+
+| Windows | Mac |
+|---|---|
+| Double-click **`windows\2-Compare-RTF-Files.bat`** | Double-click **`macos/2-Compare-RTF-Files.command`** |
+
+It prompts for two file paths — **paste or type each path and press Enter** (in Windows
+Explorer, Shift + right-click a file → *Copy as path*):
+
+```
+File 1 (reference)  : <paste the first path>
+File 2 (comparison) : <paste the second path>
+```
+
+Backslash paths and surrounding quotes are both handled. The result appears immediately —
+**EQUIVALENT** or **N difference(s) found** (each difference listed). **Nothing is saved
+automatically**; it then asks whether to export the report as **TXT**, **CSV**, or **both**,
+and prompts for where to save it (type a full path or a folder). Finally it offers to
+compare another pair. Works with any two RTF files on the machine.
+
+> **Prefer clicking files in a dialog?** Use `2b-Compare-Using-File-Picker.bat` /
+> `2b-Compare-Using-File-Picker.command` instead — same result, file-picker dialogs rather
+> than pasted paths.
+
+> **No admin rights / "Run anyway" is blocked (Windows):** that prompt is triggered because
+> downloaded files are "blocked". Clear it yourself without admin: right-click the **ZIP** →
+> **Properties** → tick **Unblock** → **OK**, *then* extract. If your company blocks `.bat`
+> files entirely, drive the tool from the R console instead (no admin, always works):
+> `source("C:/path/to/rtf-comparison-tool/run_compare_paths.R")` then paste the two paths.
+> See `START HERE (Windows).txt` for the full no-admin walkthrough.
+
+> **Mac, first run only:** macOS may say the file is "from an unidentified developer."
+> Right-click the `.command` → **Open** → **Open**. If a launcher isn't clickable, run
+> `chmod +x *.command` once in the `macos` folder.
+
+> **Tip:** keep the whole folder together — the launchers find the R scripts via their own
+> location, so the tool works from anywhere (Desktop, network share, USB drive).
+
+---
+
+## What the report tells you
+
+**Console / text report (always produced):**
+
+```
+============================================================
+RTF COMPARISON REPORT
+============================================================
+File 1:  examples/clinical_table_base.rtf
+File 2:  examples/clinical_table_changed.rtf
+Options: num_tol=0, rel_tol=FALSE, trim=TRUE, collapse_space=TRUE, casefold=FALSE
+Cells compared: 3,202
+Result:  7 DIFFERENCE(S) FOUND
+------------------------------------------------------------
+ROW   COL   STATUS               FILE 1 VALUE          FILE 2 VALUE
+3     1     VALUE_DIFF           Safety Population     Safety Population (Final)
+10    2     VALUE_DIFF           45 (21.4%)            46 (21.9%)
+10    4     VALUE_DIFF           52 (24.5%)            53 (25.0%)
+11    6     VALUE_DIFF           (-1.2 to 3.4)         (-1.0 to 3.6)
+15    5     VALUE_DIFF           31 (4.9%)             32 (5.1%)
+20    1     VALUE_DIFF           Fatigue               Fatigues
+542   1     VALUE_DIFF           ...Pharmaceuticals... ...Pharma...
+```
+
+**Each difference is classified:**
+
+| STATUS | Meaning |
+|---|---|
+| `VALUE_DIFF` | The cell exists in both files but the content differs. |
+| `CELL_ONLY_IN_FILE1` | The cell exists only in file 1 (e.g. file 1 has an extra row or column). |
+| `CELL_ONLY_IN_FILE2` | The cell exists only in file 2. |
+
+`ROW`/`COL` are 1-based positions counted top-to-bottom (titles, subtitles, table rows
+and footnotes are all numbered in the order they appear; non-table lines are a single
+"column 1").
+
+**CSV (`.csv`):** the same differences as data — columns
+`row_index, col_index, status, value_file1, value_file2` — ready for Excel or a pipeline.
+
+---
+
+## Command-line use (optional)
+
+For power users, pipelines, or batch QC. From the project folder:
+
+```bash
+Rscript compare_rtf.R --file1 path/to/base.rtf --file2 path/to/comparison.rtf
+```
+
+The comparison result always prints to the screen; **nothing is written to disk unless you
+ask**. Export on demand by naming where each file should go — `--report` for the text report,
+`--csv` for the differences:
+
+```bash
+Rscript compare_rtf.R \
+  --file1 base.rtf --file2 comparison.rtf \
+  --report result.txt --csv diffs.csv --diffdf
+```
+
+**Exit codes** (useful for automation):
+
+| Code | Meaning |
+|---|---|
+| `0` | Files are **equivalent** (no content differences). |
+| `1` | One or more **differences** found. |
+| `2` | **Error** (file not found, not a valid RTF, bad arguments). |
+
+Run `Rscript compare_rtf.R --help` for the full option list.
+
+---
+
+## Options and defaults
+
+| Option (CLI) | Default | Effect |
+|---|---|---|
+| `--num-tol <n>` | `0` (exact) | Numeric tolerance. If `> 0`, two cells that both parse as numbers (ignoring `,` and a trailing `%`) and differ by `≤ n` are treated as a match. |
+| `--rel-tol` | off | Interpret `--num-tol` as a *relative* tolerance (fraction of the larger value). |
+| `--no-collapse-space` | off | Keep internal runs of whitespace instead of collapsing them to one space. |
+| `--casefold` | off | Case-insensitive comparison. |
+| `--report <path>` | — | Also write the text report to a file. |
+| `--csv <path>` | — | Write the differences as CSV. |
+| `--diffdf` | off | Also run a second, independent comparison with the `diffdf` package and print whether it agrees. |
+
+Defaults match the confirmed clinical requirements: **exact** comparison, whitespace
+trimmed and collapsed, case preserved, and **titles/subtitles/footnotes are compared**
+(not just the table body). Special characters (©, ≥, °, µ, α, β, accents, en/minus dashes)
+are decoded and compared exactly.
+
+---
+
+## Generate your own test data
+
+You can create realistic synthetic clinical RTF files to experiment with — no Python,
+just R.
+
+**Easy way:** double-click **`windows\4-Generate-Test-Data.bat`** /
+**`macos/4-Generate-Test-Data.command`**, pick an output folder. It writes three files and
+prints a self-check:
+
+| File | Purpose |
+|---|---|
+| `clinical_table_base.rtf` | The reference table. |
+| `clinical_table_reformatted.rtf` | **Same content, different formatting** → must compare **EQUIVALENT** to base. |
+| `clinical_table_changed.rtf` | Base with **7 deliberate content edits** → must compare to base as **7 differences**. |
+
+**Command line** (with control over size and seed):
+
+```bash
+Rscript generate_test_data.R --out my_test_files            # default ~70 rows
+Rscript generate_test_data.R --out big_files --rows 50000   # large file for speed testing
+Rscript generate_test_data.R --out repro --seed 12345       # reproducible
+```
+
+After generating, compare `base` against `reformatted` (expect EQUIVALENT) and against
+`changed` (expect 7 differences) to see the tool in action.
+
+---
+
+## Run the test suite
+
+A full automated suite (119 checks) verifies every part of the tool against small
+hand-built fixtures, the large clinical example files, **and** real-world clinical
+outputs (see `tests/real_world/`).
+
+**Easy way:** double-click **`windows\3-Run-Tests.bat`** / **`macos/3-Run-Tests.command`**.
+
+**Command line:**
+
+```bash
+Rscript run_tests.R
+```
+
+You should see `RESULT: 119 passed, 0 failed`. The suite covers parsing, normalisation,
+all five difference types, numeric tolerance, the report/CSV/exit codes, edge cases
+(byte-identical fast path, non-RTF input, trailing empty rows), a large-file performance
+check, the two key integration expectations (base↔reformatted EQUIVALENT;
+base↔changed = 7 differences), and real-world clinical files (`tests/real_world/`).
+
+---
+
+## How it works
+
+Three independent stages (each separately tested):
+
+```
+  RTF file ──► (1) PARSE ──► tall table: one row per cell (row_index, col_index, raw_value)
+                  │                 (via striprtf: decodes code page, \'XX and \uN escapes,
+                  │                  and table row/cell structure)
+                  ▼
+              (2) NORMALIZE ──► trim + collapse whitespace, NBSP→space  ──► norm_value
+                  │
+                  ▼
+              (3) COMPARE ──► full outer join of the two tables on (row_index, col_index),
+                              classify each cell, summarise, write report + exit code
+```
+
+Because rows and cells are matched **positionally**, the approach works for tables of any
+shape (any number of columns) with no assumptions, and row/column count mismatches simply
+fall out as `CELL_ONLY_IN_FILEn` entries. The comparison uses a fast `data.table` keyed
+join so it scales to large files. As an independent cross-check, the `diffdf` package (the
+R analogue of SAS `PROC COMPARE`, widely trusted in pharma QC) can corroborate the result.
+
+---
+
+## What has been validated
+
+- **Content, not markup:** `clinical_table_base.rtf` vs `clinical_table_reformatted.rtf`
+  → **EQUIVALENT**, even though the two files differ on thousands of lines of RTF markup.
+- **Real differences are caught precisely:** `base` vs `clinical_table_changed.rtf`
+  → **exactly 7 differences** at the correct cells, including a subtitle change and a
+  footnote change (proving non-table text is compared).
+- **Special characters** decode correctly from both `\'XX` (Windows-1252) and `\uN`
+  (Unicode) escapes: ©, ≥, −, °, µ, α, β, –, é, ü.
+- **Robustness:** byte-identical files short-circuit instantly; non-RTF/empty input gives a
+  clear error (not a stack trace); a trailing blank row in one file does not create spurious
+  differences; CRLF and LF line endings are treated the same.
+
+See `docs/RTF_Compare_Implementation_Plan_R.md` for the full build specification and
+`examples/README.md` for details of the provided example files.
+
+---
+
+## Known limitations
+
+- **Merged / spanned cells** can shift positional column alignment; such cases are reported
+  as mismatches rather than resolved.
+- **Embedded images, drawing objects, deeply nested tables** are out of scope — text is
+  extracted, objects are ignored.
+- **Unicode canonical normalisation is intentionally *not* applied** (comparison is exact),
+  so visually similar but distinct code points (e.g. micro sign µ vs Greek mu μ) are
+  reported as different — which is correct for exact QC.
+- **Very large files:** typical clinical TLF files (a few thousand rows) compare in well
+  under a second. Tens of thousands of rows take longer because the RTF parser (`striprtf`)
+  is pure R. For genuinely huge datasets, compare the **source data** that produced the RTF
+  rather than the rendered RTF.
+- **SAS version** is out of scope for now; the architecture is language-agnostic and could
+  be ported later.
+
+---
+
+## Repository layout
+
+```
+rtf-comparison-tool/
+├── README.md                  ← you are here
+├── START HERE (Windows).txt   ← plain-text quick start for the client (Windows)
+├── START HERE (Mac).txt       ← plain-text quick start for the client (macOS)
+├── AGENTS.md                  ← guide for developers / AI agents working on the repo
+├── compare_rtf.R              ← the comparison engine + command-line interface
+├── run_compare_paths.R        ← compare by pasting two file paths (default)
+├── run_compare.R              ← point-and-click runner (file pickers, the "2b" option)
+├── install_packages.R         ← one-time package installer
+├── generate_test_data.R       ← synthetic test-file generator (pure R)
+├── run_tests.R                ← runs the automated test suite
+├── windows/                   ← double-click launchers for Windows (.bat)
+├── macos/                     ← double-click launchers for macOS (.command)
+├── examples/                  ← provided clinical RTF files + their description
+├── docs/                      ← the implementation specification
+└── tests/                     ← test suite, fixtures, and real-world tests
+```
+
+---
+
+*Built by Lawlor Solutions. Licensed under the MIT License (see `LICENSE`).*

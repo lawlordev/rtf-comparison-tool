@@ -1,0 +1,109 @@
+========================================================================
+ RTF COMPARISON TOOL  -  START HERE (Mac)
+========================================================================
+
+WHAT IT DOES
+  Compares two RTF files and reports how their CONTENT differs, ignoring
+  cosmetic formatting (fonts, spacing, column widths). It tells you the
+  files are EQUIVALENT, or lists every difference with its row/column.
+
+WHAT YOU NEED
+  - macOS
+  - R installed. Either:
+        * download from https://cran.r-project.org  (the .pkg installer), or
+        * if you use Homebrew:  brew install --cask r
+  - No administrator rights are needed to RUN the tool.
+
+------------------------------------------------------------------------
+ STEP 0  -  UNZIP
+------------------------------------------------------------------------
+  Double-click the ZIP in Finder to extract it. Keep the whole extracted
+  folder together; don't move files out of it.
+
+  First time you open a launcher, macOS may say it is "from an
+  unidentified developer". This is normal and needs NO admin:
+        right-click (or Control-click) the file -> Open -> Open.
+  After that, it opens on a normal double-click.
+
+  If a launcher won't run at all, open the Terminal app, type  cd  and a
+  space, drag the "macos" folder onto the window, press Enter, then run:
+        chmod +x *.command
+  (You only ever need this once.)
+
+------------------------------------------------------------------------
+ STEP 1  -  ONE-TIME SETUP  (first time only; needs internet)
+------------------------------------------------------------------------
+  Open the "macos" folder and double-click:
+
+        1-Install-Packages.command
+
+  A Terminal window installs 5 small R packages. Wait for  SUCCESS ,
+  then press any key to close. You only do this once per computer.
+
+------------------------------------------------------------------------
+ STEP 2  -  COMPARE TWO FILES  (by pasting their paths)
+------------------------------------------------------------------------
+  In the "macos" folder, double-click:
+
+        2-Compare-RTF-Files.command
+
+  It asks for two file paths. For each one, the easiest way to get the
+  path is to DRAG the RTF file from Finder onto the Terminal window (that
+  pastes its full path), then press Enter. (Or in Finder: right-click the
+  file, hold the Option key, choose "Copy ... as Pathname", then paste.)
+
+      File 1 (reference)  : <drag/paste the first path>   [Enter]
+      File 2 (comparison) : <drag/paste the second path>  [Enter]
+
+  The result appears immediately on screen:
+        "EQUIVALENT"            = no content differences, or
+        "N difference(s) found" = they differ (each one is listed)
+
+  NOTHING is saved automatically. After the result it asks:
+
+        Export report?  [t] TXT   [c] CSV   [b] both   [Enter] skip :
+
+  Press Enter to skip, or pick a format. If you export, it then asks WHERE
+  to save - type or paste a full path (or a folder), for example
+        /Users/you/QC/table_compare.txt
+  and only that file is written. (TXT = the full report; CSV = just the
+  differences, for Excel/Numbers.)
+
+  It then asks "Compare another pair? (y/N)" so you can keep going.
+  Works with ANY two RTF files anywhere on the computer.
+
+  Prefer clicking files in a dialog instead of pasting paths?
+        Double-click  2b-Compare-Using-File-Picker.command  instead.
+
+------------------------------------------------------------------------
+ ALTERNATIVE  -  drive it from the R console (always works)
+------------------------------------------------------------------------
+  If you'd rather not use the launchers, open R (or RStudio) and run, with
+  your real folder location and forward slashes:
+
+        source("/Users/you/Downloads/rtf-comparison-tool/install_packages.R")   # once
+        source("/Users/you/Downloads/rtf-comparison-tool/run_compare_paths.R")  # to compare
+
+  ...then paste the two file paths at the prompts.
+
+------------------------------------------------------------------------
+ IF SOMETHING GOES WRONG
+------------------------------------------------------------------------
+  "Could not find R"  -> install R (see WHAT YOU NEED above), then redo
+        Step 1.
+  Launcher won't open / "unidentified developer"  -> right-click -> Open
+        -> Open. If still stuck, run  chmod +x *.command  (see Step 0).
+  "...packages failed to install"  -> check internet and run Step 1 again
+        (it is safe to run repeatedly).
+  Keep the folder intact - the launchers expect the other files to stay
+  in the folder above them.
+
+------------------------------------------------------------------------
+ OPTIONAL EXTRAS  (in the "macos" folder)
+------------------------------------------------------------------------
+  2b-Compare-Using-File-Picker.command  Pick files in a dialog instead.
+  3-Run-Tests.command                    Built-in test suite ("119 passed").
+  4-Generate-Test-Data.command           Creates sample RTF files to try.
+
+  For full details, command-line use, and options, see README.md.
+========================================================================

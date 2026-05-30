@@ -1,0 +1,22 @@
+# R session artifacts
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+# Generated test data and timestamped comparison outputs
+examples/generated/
+RTF_comparison_*_vs_*_*.txt
+RTF_comparison_*_vs_*_*.csv
+diffdf_report.txt
+
+# Real-world test inputs are NOT published (may contain confidential data).
+# Add your own under tests/real_world/ locally; see that folder's README.
+tests/real_world/*.rtf
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor / tooling
+.claude/
