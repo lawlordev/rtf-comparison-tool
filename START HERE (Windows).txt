@@ -74,6 +74,44 @@ WHAT YOU NEED
         Double-click  2b-Compare-Using-File-Picker.bat  instead.
 
 ------------------------------------------------------------------------
+ STEP 3  -  COMPARE A WHOLE FOLDER AT ONCE  (batch)
+------------------------------------------------------------------------
+  To check many tables in one go, double-click:
+
+        2c-Compare-Folders.bat
+
+  Two folder pickers open. Choose the FIRST (reference) folder, then the
+  SECOND (comparison) folder. The tool compares EVERY .rtf file in the first
+  folder against the file of the SAME NAME in the second folder.
+
+  You get ONE report that lists EVERY file - including the ones that are
+  EQUIVALENT - so it is a complete record of the whole set. Files that
+  differ have their differences listed; files found in only one folder are
+  flagged. The full report is saved automatically inside the tool's
+  "logs\reports" folder, and you are also offered a Save dialog to keep your
+  own copy wherever you like.
+
+  (The two folders must use matching file names so files can be paired.)
+
+------------------------------------------------------------------------
+ AUDIT LOG  -  proof of every run (kept automatically)
+------------------------------------------------------------------------
+  EVERY comparison you run - single file OR a whole folder, INCLUDING runs
+  that find no differences - is recorded with a date and time in:
+
+        logs\audit_log.csv
+
+  Open it any time (double-click  5-View-Audit-Log.bat ) in Excel to review,
+  sort, or print proof of which files/folders you checked and when. One row
+  per run.
+
+  ** IMPORTANT - KEEP THE FOLDER INTACT **
+  The audit log and the saved reports live in the "logs" folder, right next
+  to the "R" and "windows" folders. You can move the WHOLE tool folder
+  anywhere, but do NOT take individual files out of it - if you do, the tool
+  can no longer find "logs" and cannot save your audit trail.
+
+------------------------------------------------------------------------
  IF YOUR COMPANY BLOCKS .BAT FILES  (no admin needed - always works)
 ------------------------------------------------------------------------
   Some locked-down PCs won't run .bat files at all. In that case, drive
@@ -111,8 +149,10 @@ WHAT YOU NEED
  OPTIONAL EXTRAS  (in the "windows" folder)
 ------------------------------------------------------------------------
   2b-Compare-Using-File-Picker.bat  Pick files in a dialog instead of paths.
-  3-Run-Tests.bat                   Built-in test suite ("119 passed").
+  2c-Compare-Folders.bat            Batch-compare two whole folders.
+  3-Run-Tests.bat                   Built-in test suite ("171 passed").
   4-Generate-Test-Data.bat          Creates sample RTF files to practice on.
+  5-View-Audit-Log.bat              Open the audit log (logs\audit_log.csv).
 
   For full details, command-line use, and options, see README.md.
 ========================================================================

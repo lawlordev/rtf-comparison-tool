@@ -22,17 +22,27 @@ cell text, normalise it, and compare the normalised content positionally.** The
 
 ## 2. Golden invariants — do not break these
 
-Run `Rscript R/run_tests.R` after any change. It must report **119 passed, 0 failed**. In
+Run `Rscript R/run_tests.R` after any change. It must report **171 passed, 0 failed**. In
 particular:
 
 - **base vs reformatted → EQUIVALENT** (0 differences) — content is compared, not markup.
 - **base vs changed → exactly 7 `VALUE_DIFF`s** (`examples/`), at the documented cells.
 - **Three separable stages**, each unit-tested in isolation:
   `parse_rtf()` → `normalize_cells()` → `compare_tables()`.
-- **Exit codes:** `0` equivalent, `1` differences, `2` error. (CLI + path runner.)
+- **Exit codes:** `0` equivalent, `1` differences, `2` error. (CLI + path runner + batch runner.)
 - **Default comparison is exact**; numeric tolerance is opt-in (`--num-tol`).
+- **The engine never writes the audit log.** `compare_rtf()` / `compare_rtf_folder()` /
+  `write_report()` stay pure (write only when handed a path). The *runners* call
+  `append_audit_log()`. This is what keeps the test suite from spamming a log and preserves
+  the "nothing written unless requested" contract for the CLI.
+- **Every interactive run is audit-logged — including no-difference runs.** The three runners
+  (`run_compare_paths.R`, `run_compare.R`, `run_compare_folder.R`) append one row per run to
+  `logs/audit_log.csv`. Logging failures must never abort a comparison (wrap in `tryCatch`).
+- **Batch lists every file**, equivalent ones included; files in only one folder or that fail
+  to parse are flagged (`ONLY_IN_FOLDER1/2`, `ERROR`), never silently dropped.
 - **Nothing is written to disk unless requested** — the CLI writes only with
-  `--report`/`--csv`; the interactive runners show the result then *offer* to export.
+  `--report`/`--csv`; the single-file runners show the result then *offer* to export. (The
+  batch runner additionally auto-archives its report and appends the audit log, by design.)
 - **Special characters must survive decoding unchanged:** `© ≥ − ° µ – é ü α β`. Unicode
   canonical normalisation is intentionally NOT applied (exact comparison).
 
@@ -47,12 +57,17 @@ R/                     All R scripts live here:
                        sourcing it never triggers the CLI.
   run_compare_paths.R  Interactive runner — paste two paths (default compare launcher).
   run_compare.R        Interactive runner — native file-picker dialogs (the "2b" option).
+  run_compare_folder.R Interactive runner — batch-compare two folders (the "2c" option).
   install_packages.R   Idempotent installer for the 5 CRAN packages.
   generate_test_data.R Pure-R synthetic test-data generator (base/reformatted/changed).
   run_tests.R          Runs the testthat suite; exit 0 all-pass, 1 otherwise.
 windows/  macos/       Double-click launchers (.bat / .command) + Rscript finders.
+                       (2c = batch folders, 5 = view audit log.)
+logs/                  Runtime: audit_log.csv (one row per run) + reports/ (archived batch
+                       reports). Ships with README.txt only; the data is git-ignored. The
+                       tool finds this via rtf_tool_root(), so the folder must stay intact.
 examples/              Provided clinical RTF files (canonical integration fixtures).
-tests/testthat/        Unit + integration tests (test-01..10) and small fixtures/.
+tests/testthat/        Unit + integration tests (test-01..12) and small fixtures/.
 tests/real_world/      Derived-from-real TLF tests (skipped if files removed).
 docs/                  Original build specification (historical source of truth for scope).
 README.md              Client-facing usage. START HERE (Windows/Mac).txt = quick starts.
@@ -97,13 +112,14 @@ double-click `windows\1-Install-Packages.bat` / `macos/1-Install-Packages.comman
 Rscript R/run_compare_paths.R
 # compare directly (prints result; writes only if you pass --report/--csv):
 Rscript R/compare_rtf.R --file1 a.rtf --file2 b.rtf [--report out.txt] [--csv diffs.csv]
-# run the whole test suite (expect "119 passed"):
+# run the whole test suite (expect "171 passed"):
 Rscript R/run_tests.R
 # generate synthetic test files (raise --rows for a large performance file):
 Rscript R/generate_test_data.R --out examples/generated [--rows N] [--seed S]
 ```
-Point-and-click equivalents are in `macos/` (`2-…` paths, `2b-…` file picker, `3-…` tests,
-`4-…` generate). The `.command` files must be executable (`chmod +x macos/*.command`); on
+Point-and-click equivalents are in `macos/` (`2-…` paths, `2b-…` file picker, `2c-…` batch
+folders, `3-…` tests, `4-…` generate, `5-…` view audit log). The `.command` files must be
+executable (`chmod +x macos/*.command`); on
 first launch macOS Gatekeeper may require **right-click → Open → Open** (no admin needed).
 
 ## 6. Doing things — Windows
@@ -113,7 +129,8 @@ Rscript R/compare_rtf.R --file1 a.rtf --file2 b.rtf
 Rscript R/run_tests.R
 ```
 Point-and-click: `windows\2-Compare-RTF-Files.bat` (paste paths), `2b-…` (file picker),
-`1-Install-Packages.bat`, `3-Run-Tests.bat`, `4-Generate-Test-Data.bat`.
+`2c-Compare-Folders.bat` (batch folders), `1-Install-Packages.bat`, `3-Run-Tests.bat`,
+`4-Generate-Test-Data.bat`, `5-View-Audit-Log.bat`.
 
 - **Avoid the "Run anyway" / admin prompt:** files arrive "blocked"; clear it without admin
   by right-clicking the **ZIP → Properties → Unblock → OK** *before* extracting.
@@ -137,6 +154,14 @@ Point-and-click: `windows\2-Compare-RTF-Files.bat` (paste paths), `2b-…` (file
 - **Real-world tests** (`test-10`) `skip_if_not(file.exists(...))`, so the suite still
   passes if `tests/real_world/` is deleted (e.g. to ship without real data).
 - **Reports pad by display width**, not bytes, so columns align with multi-byte characters.
+- **Audit log schema is pinned** by `.AUDIT_COLS` in `compare_rtf.R` and asserted in
+  `test-12-audit.R`; `append_audit_log()` writes the header only when the file is new, then
+  appends one row per run via `data.table::fwrite(append=TRUE)` (handles comma-quoting). If
+  you add a column, update both the constant and the test, and `logs/README.txt`.
+- **Batch matches files by name** across the two folders (case-insensitive `.rtf` listing,
+  exact-name pairing). The byte-identical fast path means two byte-identical *non-RTF* files
+  compare EQUIVALENT without parsing — so a batch "ERROR" test needs the two bad files to
+  differ in bytes (see `test-11-batch.R`).
 - **Known limitation / likely next feature:** real multi-page TLFs repeat the title block
   and footnotes on every printed page; if two versions of the same table paginate
   differently, positional matching drifts. A page-aware "ignore repeated page furniture"
@@ -147,7 +172,7 @@ Point-and-click: `windows\2-Compare-RTF-Files.bat` (paste paths), `2b-…` (file
 
 ## 8. Definition of done for a change
 
-1. `Rscript R/run_tests.R` → **119 passed, 0 failed** (or more, if you added tests).
+1. `Rscript R/run_tests.R` → **171 passed, 0 failed** (or more, if you added tests).
 2. New behaviour has a test; new options are documented in `README.md` and (if user-facing)
    the `START HERE` files.
 3. No stray output files committed (`RTF_comparison_*`, `.DS_Store`, `examples/generated/`

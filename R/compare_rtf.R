@@ -27,6 +27,9 @@
 # only for the command-line interface; diffdf only for the optional secondary
 # cross-check. Each is loaded with a clear, actionable error message.
 
+# Tool version, stamped into the audit log so a run can be traced to a build.
+RTF_TOOL_VERSION <- "1.1.0"
+
 .need_pkg <- function(pkg, why = "") {
   if (!requireNamespace(pkg, quietly = TRUE)) {
     stop(sprintf(
@@ -219,6 +222,30 @@ run_diffdf_check <- function(base, comp, file = NULL) {
   ifelse(nchar(x) > n, paste0(substr(x, 1, n - 1L), "…"), x)
 }
 
+#' Format a difference table as aligned, fixed-width report lines.
+#'
+#' Shared by the single-file report (write_report) and the batch report
+#' (write_batch_report) so the two stay byte-for-byte consistent. Padding is by
+#' display width (not bytes) so columns line up even with multi-byte characters.
+#'
+#' @param d A diffs data.table (row_index, col_index, status, value_file1/2).
+#' @return Character vector of report lines (empty if there are no differences).
+.format_diff_detail <- function(d) {
+  if (is.null(d) || nrow(d) == 0L) return(character(0))
+  padw <- function(x, n) {
+    x <- as.character(x)
+    paste0(x, strrep(" ", pmax(0L, n - nchar(x, type = "width"))))
+  }
+  line <- function(a, b, c, e, f)
+    paste(padw(a, 5L), padw(b, 5L), padw(c, 20L), padw(e, 39L), f)
+  c(
+    line("ROW", "COL", "STATUS", "FILE 1 VALUE", "FILE 2 VALUE"),
+    vapply(seq_len(nrow(d)), function(i) line(
+      d$row_index[i], d$col_index[i], d$status[i],
+      .clip(d$value_file1[i]), .clip(d$value_file2[i])), character(1))
+  )
+}
+
 #' Print and optionally write the comparison report.
 #'
 #' Always prints a console summary (and the detailed difference table when
@@ -253,21 +280,7 @@ write_report <- function(result, file1, file2, txt_path = NULL, csv_path = NULL,
 
   detail <- character(0)
   if (!result$equivalent && result$n_diffs > 0L) {
-    d <- result$diffs
-    # Pad by display width (not bytes) so columns line up even with
-    # multi-byte characters such as the minus sign or copyright symbol.
-    padw <- function(x, n) {
-      x <- as.character(x)
-      paste0(x, strrep(" ", pmax(0L, n - nchar(x, type = "width"))))
-    }
-    line <- function(a, b, c, e, f)
-      paste(padw(a, 5L), padw(b, 5L), padw(c, 20L), padw(e, 39L), f)
-    detail <- c(
-      line("ROW", "COL", "STATUS", "FILE 1 VALUE", "FILE 2 VALUE"),
-      vapply(seq_len(nrow(d)), function(i) line(
-        d$row_index[i], d$col_index[i], d$status[i],
-        .clip(d$value_file1[i]), .clip(d$value_file2[i])), character(1))
-    )
+    detail <- .format_diff_detail(result$diffs)
   }
 
   txt <- c(hdr, detail, "")
@@ -361,6 +374,281 @@ compare_rtf <- function(file1, file2,
   result$byte_identical <- byte_identical
   result$diffdf_summary <- diffdf_summary
   invisible(result)
+}
+
+# ============================================================================
+# Batch comparison -- compare every RTF in one folder against the same-named
+# file in a second folder.
+# ============================================================================
+#' Compare every RTF file in one folder against its namesake in another folder.
+#'
+#' Lists the .rtf files in each folder and pairs them by file name. Every file
+#' is reported -- including the ones whose content is EQUIVALENT -- so the run
+#' doubles as a QC record. Files present in only one folder are flagged rather
+#' than silently skipped, and a parse error on one file never aborts the batch.
+#'
+#' @param dir1,dir2  The reference folder and the comparison folder.
+#' @param trim,collapse_space,casefold,num_tol,rel_tol  Passed to compare_rtf().
+#' @param recursive  Also descend into sub-folders (default FALSE).
+#' @param progress   Print one line per file as it is compared (default = console).
+#' @param console    Print a summary block when finished (default TRUE).
+#' @return list(dir1, dir2, summary, results, totals, all_equivalent) where
+#'   summary is a data.table(file, status, n_cells, n_diffs, note) with one row
+#'   per file and results is a named list of the per-file compare_rtf() outputs
+#'   (only for files that were actually compared).
+compare_rtf_folder <- function(dir1, dir2,
+                               trim = TRUE, collapse_space = TRUE, casefold = FALSE,
+                               num_tol = 0, rel_tol = FALSE,
+                               recursive = FALSE,
+                               progress = console, console = TRUE) {
+  .need_pkg("data.table")
+  for (d in c(dir1, dir2)) {
+    if (!dir.exists(d)) stop(sprintf("Folder not found: '%s'", d), call. = FALSE)
+  }
+
+  list_rtf <- function(d) list.files(d, pattern = "\\.rtf$", ignore.case = TRUE,
+                                     recursive = recursive, full.names = FALSE)
+  f1 <- list_rtf(dir1)
+  f2 <- list_rtf(dir2)
+  all_names <- sort(unique(c(f1, f2)))
+
+  if (length(all_names) == 0L) {
+    stop(sprintf("No .rtf files found in either folder:\n  %s\n  %s", dir1, dir2),
+         call. = FALSE)
+  }
+
+  rows    <- vector("list", length(all_names))
+  results <- list()
+
+  for (i in seq_along(all_names)) {
+    nm  <- all_names[[i]]
+    in1 <- nm %in% f1
+    in2 <- nm %in% f2
+
+    if (in1 && !in2) {
+      status <- "ONLY_IN_FOLDER1"; ncells <- NA_integer_; ndiffs <- NA_integer_
+      note <- "No file of this name in folder 2"
+    } else if (!in1 && in2) {
+      status <- "ONLY_IN_FOLDER2"; ncells <- NA_integer_; ndiffs <- NA_integer_
+      note <- "No file of this name in folder 1"
+    } else {
+      res <- tryCatch(
+        compare_rtf(file.path(dir1, nm), file.path(dir2, nm),
+                    trim = trim, collapse_space = collapse_space, casefold = casefold,
+                    num_tol = num_tol, rel_tol = rel_tol, console = FALSE),
+        error = function(e) e)
+      if (inherits(res, "error")) {
+        status <- "ERROR"; ncells <- NA_integer_; ndiffs <- NA_integer_
+        note <- conditionMessage(res)
+      } else {
+        results[[nm]] <- res
+        ncells <- res$n_cells; ndiffs <- res$n_diffs
+        status <- if (isTRUE(res$equivalent)) "EQUIVALENT" else "DIFFERENCES"
+        note   <- ""
+      }
+    }
+
+    rows[[i]] <- data.frame(file = nm, status = status, n_cells = ncells,
+                            n_diffs = ndiffs, note = note, stringsAsFactors = FALSE)
+    if (progress) cat(sprintf("  %-44s %s\n", nm,
+                              if (status == "DIFFERENCES")
+                                sprintf("%d difference(s)", ndiffs) else status))
+  }
+
+  summary <- data.table::rbindlist(rows)
+  totals <- list(
+    n_files      = nrow(summary),
+    n_equivalent = sum(summary$status == "EQUIVALENT"),
+    n_differing  = sum(summary$status == "DIFFERENCES"),
+    n_only1      = sum(summary$status == "ONLY_IN_FOLDER1"),
+    n_only2      = sum(summary$status == "ONLY_IN_FOLDER2"),
+    n_errors     = sum(summary$status == "ERROR"),
+    total_diffs  = sum(summary$n_diffs, na.rm = TRUE)
+  )
+  all_equivalent <- totals$n_differing == 0L && totals$n_errors == 0L &&
+                    totals$n_only1 == 0L && totals$n_only2 == 0L
+
+  if (console) {
+    cat(sprintf(
+      "\n%d file(s) compared: %d equivalent, %d differing, %d only in folder 1, %d only in folder 2, %d error(s).\n",
+      totals$n_files, totals$n_equivalent, totals$n_differing,
+      totals$n_only1, totals$n_only2, totals$n_errors))
+  }
+
+  list(dir1 = dir1, dir2 = dir2, summary = summary, results = results,
+       totals = totals, all_equivalent = all_equivalent)
+}
+
+#' Write the batch comparison report (text and/or CSV).
+#'
+#' The text report lists EVERY file with its result (equivalent files included),
+#' then shows the cell-level differences for each file that differs. The CSV is
+#' the per-file summary table -- a machine-readable record of the whole run.
+#'
+#' @param batch        Output of compare_rtf_folder().
+#' @param txt_path,csv_path  Optional output paths.
+#' @param options_str  Human-readable options string for the header.
+#' @param console      Print the report to the console (default FALSE).
+#' @param timestamp    Run time shown in the header (default now).
+#' @return The text report (character vector), invisibly.
+write_batch_report <- function(batch, txt_path = NULL, csv_path = NULL,
+                               options_str = "", console = FALSE,
+                               timestamp = Sys.time()) {
+  s <- batch$summary
+  t <- batch$totals
+  overall <- if (isTRUE(batch$all_equivalent)) "ALL FILES EQUIVALENT"
+             else "DIFFERENCES / MISMATCHES FOUND"
+
+  hdr <- c(
+    "============================================================",
+    "RTF BATCH COMPARISON REPORT",
+    "============================================================",
+    paste0("Folder 1 (reference):  ", batch$dir1),
+    paste0("Folder 2 (comparison): ", batch$dir2),
+    paste0("Run at:  ", format(timestamp, "%Y-%m-%d %H:%M:%S")),
+    paste0("Options: ", options_str),
+    sprintf("Files compared: %d  (equivalent: %d, differing: %d, only in folder 1: %d, only in folder 2: %d, errors: %d)",
+            t$n_files, t$n_equivalent, t$n_differing, t$n_only1, t$n_only2, t$n_errors),
+    paste0("Result:  ", overall),
+    "------------------------------------------------------------",
+    "PER-FILE RESULTS  (every file is listed, including matches):"
+  )
+
+  padw <- function(x, n) {
+    x <- as.character(x)
+    paste0(x, strrep(" ", pmax(0L, n - nchar(x, type = "width"))))
+  }
+  result_label <- function(st, nd) data.table::fcase(
+    st == "EQUIVALENT",     "EQUIVALENT",
+    st == "DIFFERENCES",    sprintf("%s difference(s)", nd),
+    st == "ONLY_IN_FOLDER1","ONLY IN FOLDER 1 (no match)",
+    st == "ONLY_IN_FOLDER2","ONLY IN FOLDER 2 (no match)",
+    st == "ERROR",          "ERROR (could not compare)",
+    default =               st)
+  fname_w <- max(c(nchar("FILE"), nchar(s$file)))
+  table_lines <- c(
+    paste0(padw("FILE", fname_w), "  ", "RESULT"),
+    vapply(seq_len(nrow(s)), function(i)
+      paste0(padw(s$file[i], fname_w), "  ", result_label(s$status[i], s$n_diffs[i])),
+      character(1))
+  )
+
+  # Detailed cell-level differences for each file that differs.
+  detail <- character(0)
+  differing <- s$file[s$status == "DIFFERENCES"]
+  if (length(differing) > 0L) {
+    detail <- c("", "------------------------------------------------------------",
+                "DIFFERENCES BY FILE:")
+    for (nm in differing) {
+      res <- batch$results[[nm]]
+      detail <- c(detail, "",
+                  sprintf(">>> %s  (%d difference(s))", nm, res$n_diffs),
+                  .format_diff_detail(res$diffs))
+    }
+  }
+  # Note any files that could not be compared at all.
+  problem <- s[s$status %in% c("ONLY_IN_FOLDER1", "ONLY_IN_FOLDER2", "ERROR"), ]
+  if (nrow(problem) > 0L) {
+    detail <- c(detail, "", "------------------------------------------------------------",
+                "FILES NOT COMPARED:",
+                vapply(seq_len(nrow(problem)), function(i)
+                  sprintf("  %s  -- %s", problem$file[i], problem$note[i]), character(1)))
+  }
+
+  txt <- c(hdr, table_lines, detail, "")
+  if (console) cat(txt, sep = "\n")
+
+  if (!is.null(txt_path)) writeLines(enc2utf8(txt), txt_path, useBytes = TRUE)
+  if (!is.null(csv_path)) {
+    .need_pkg("data.table")
+    data.table::fwrite(s, csv_path)
+  }
+  invisible(txt)
+}
+
+# ============================================================================
+# Tool location + audit log -- proof of which comparisons were run, and when.
+# ============================================================================
+#' Locate the tool's root folder (the one containing R/compare_rtf.R).
+#'
+#' Walks up from a hint directory (typically the script's folder), then from
+#' RTF_TOOL_ROOT, then the working directory. The audit log and archived reports
+#' live under this root, which is why the folder must be kept intact.
+#'
+#' @param hint Optional directory to start searching from.
+#' @return Absolute path to the tool root (falls back to getwd() if not found).
+rtf_tool_root <- function(hint = NULL) {
+  starts <- c(hint, Sys.getenv("RTF_TOOL_ROOT", ""), getwd())
+  for (s in starts) {
+    if (is.null(s) || !nzchar(s)) next
+    d <- normalizePath(s, mustWork = FALSE)
+    for (i in 1:10) {
+      if (file.exists(file.path(d, "R", "compare_rtf.R"))) return(d)
+      parent <- dirname(d)
+      if (identical(parent, d)) break
+      d <- parent
+    }
+  }
+  normalizePath(getwd(), mustWork = FALSE)
+}
+
+#' Path to the append-only audit log (logs/audit_log.csv under the tool root).
+audit_log_path <- function(root) file.path(root, "logs", "audit_log.csv")
+
+# The audit log's column order. One row is appended per run (single or batch).
+.AUDIT_COLS <- c("timestamp", "run_type", "item1", "item2", "result",
+                 "files_compared", "files_equivalent", "files_differing",
+                 "files_only_in_1", "files_only_in_2", "files_errored",
+                 "total_diffs", "report_saved", "user", "host", "tool_version")
+
+#' Append one record to the audit log, creating the file (with header) if needed.
+#'
+#' Every run is logged -- including runs that find NO differences -- so the log
+#' is a complete, timestamped record of the QC work performed. Writing the log
+#' never aborts a comparison: callers should wrap this in tryCatch and carry on.
+#'
+#' @param root        Tool root (see rtf_tool_root()).
+#' @param run_type    "single" or "batch".
+#' @param item1,item2 The two files (single) or folders (batch) compared.
+#' @param result      Short result string (e.g. "EQUIVALENT", "1 DIFFERENCE(S)").
+#' @param files_*     Per-run counts (defaults suit a single-file run).
+#' @param total_diffs Total cell-level differences across the run.
+#' @param report_saved Path of any report written for this run ("" if none).
+#' @param timestamp   Run time (default now).
+#' @return The audit log path, invisibly.
+append_audit_log <- function(root, run_type, item1, item2, result,
+                             files_compared = 1L, files_equivalent = NA_integer_,
+                             files_differing = NA_integer_, files_only_in_1 = 0L,
+                             files_only_in_2 = 0L, files_errored = 0L,
+                             total_diffs = 0L, report_saved = "",
+                             timestamp = Sys.time()) {
+  .need_pkg("data.table")
+  path <- audit_log_path(root)
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+
+  entry <- data.frame(
+    timestamp        = format(timestamp, "%Y-%m-%d %H:%M:%S"),
+    run_type         = run_type,
+    item1            = item1,
+    item2            = item2,
+    result           = result,
+    files_compared   = files_compared,
+    files_equivalent = files_equivalent,
+    files_differing  = files_differing,
+    files_only_in_1  = files_only_in_1,
+    files_only_in_2  = files_only_in_2,
+    files_errored    = files_errored,
+    total_diffs      = total_diffs,
+    report_saved     = report_saved,
+    user             = unname(Sys.info()[["user"]]),
+    host             = unname(Sys.info()[["nodename"]]),
+    tool_version     = RTF_TOOL_VERSION,
+    stringsAsFactors = FALSE
+  )[, .AUDIT_COLS]
+
+  is_new <- !file.exists(path)
+  data.table::fwrite(entry, path, append = !is_new, col.names = is_new)
+  invisible(path)
 }
 
 # ============================================================================

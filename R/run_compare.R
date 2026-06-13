@@ -28,6 +28,9 @@ if (!file.exists(engine)) engine <- file.path(getwd(), "compare_rtf.R")
 if (!file.exists(engine)) stop("Cannot find compare_rtf.R (expected in the R/ folder).", call. = FALSE)
 source(engine)
 
+# The tool root holds the logs/ folder (audit log). Keep the folder intact.
+root <- rtf_tool_root(script_dir)
+
 # --- small cross-platform helpers -------------------------------------------
 have_tcltk <- requireNamespace("tcltk", quietly = TRUE) &&
   isTRUE(tryCatch({ tcltk::tclvalue(tcltk::tclVar("ok")); TRUE },
@@ -130,6 +133,7 @@ if (isTRUE(result$equivalent)) {
 }
 
 # --- optional export: pick format + location with a Save dialog --------------
+saved_path <- ""
 if (gui_mode && have_tcltk) {
   ans <- tryCatch(as.character(tcltk::tkmessageBox(
     title = "Export report?", icon = "question", type = "yesno",
@@ -151,10 +155,22 @@ if (gui_mode && have_tcltk) {
         if (is_csv) write_report(result, file1, file2, csv_path = dest, console = FALSE)
         else        write_report(result, file1, file2, txt_path = dest, options_str = OPTS, console = FALSE)
         TRUE }, error = function(e) { say("ERROR writing file: ", conditionMessage(e)); FALSE })
-      if (ok) { say("Saved: ", dest); open_path(dest) }
+      if (ok) { saved_path <- dest; say("Saved: ", dest); open_path(dest) }
     }
   }
 }
+
+# --- record this run in the audit log (always, even when EQUIVALENT) ---------
+result_str <- if (isTRUE(result$equivalent)) "EQUIVALENT" else
+              sprintf("%d DIFFERENCE(S)", result$n_diffs)
+audit_path <- tryCatch(
+  append_audit_log(root, "single", file1, file2, result_str,
+                   files_compared = 1L,
+                   files_equivalent = if (isTRUE(result$equivalent)) 1L else 0L,
+                   files_differing  = if (isTRUE(result$equivalent)) 0L else 1L,
+                   total_diffs = result$n_diffs, report_saved = saved_path),
+  error = function(e) { say("WARNING: could not update audit log: ", conditionMessage(e)); NA })
+if (!is.na(audit_path)) say("Audit log updated: ", audit_path)
 
 say("\nDone.")
 quit(status = if (isTRUE(result$equivalent)) 0L else 1L)

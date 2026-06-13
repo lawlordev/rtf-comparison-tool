@@ -10,6 +10,11 @@ RTF_comparison_*_vs_*_*.txt
 RTF_comparison_*_vs_*_*.csv
 diffdf_report.txt
 
+# Runtime audit log and archived batch reports (one per machine/run).
+# The folder itself ships with logs/README.txt; only the runtime data is ignored.
+logs/audit_log.csv
+logs/reports/
+
 # Real-world test inputs are NOT published (may contain confidential data).
 # Add your own under tests/real_world/ locally; see that folder's README.
 tests/real_world/*.rtf
