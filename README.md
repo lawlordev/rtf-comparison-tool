@@ -18,6 +18,9 @@ tabular RTF.
 
 - [What you need](#what-you-need)
 - [Quick start — the easy way (no typing)](#quick-start--the-easy-way-no-typing)
+- [Compare whole folders at once (batch)](#compare-whole-folders-at-once-batch)
+- [Audit log — proof of every run](#audit-log--proof-of-every-run)
+- [Keep the tool folder intact](#keep-the-tool-folder-intact)
 - [What the report tells you](#what-the-report-tells-you)
 - [Command-line use (optional)](#command-line-use-optional)
 - [Options and defaults](#options-and-defaults)
@@ -78,6 +81,69 @@ compare another pair. Works with any two RTF files on the machine.
 > **Prefer clicking files in a dialog?** Use `2b-Compare-Using-File-Picker.bat` /
 > `2b-Compare-Using-File-Picker.command` instead — same result, file-picker dialogs rather
 > than pasted paths.
+
+---
+
+## Compare whole folders at once (batch)
+
+To QC a whole set of tables in one go, compare two **folders** instead of two files:
+
+| Windows | Mac |
+|---|---|
+| Double-click **`windows\2c-Compare-Folders.bat`** | Double-click **`macos/2c-Compare-Folders.command`** |
+
+Two folder pickers open — choose the **reference** folder, then the **comparison** folder.
+The tool compares **every `.rtf` file** in the first folder against the file of the **same
+name** in the second folder, and produces **one report that lists every file** — including the
+ones that are **EQUIVALENT** — so the report is a complete record of the set:
+
+```
+PER-FILE RESULTS  (every file is listed, including matches):
+FILE            RESULT
+table_14-1.rtf  EQUIVALENT
+table_14-2.rtf  7 difference(s)
+table_14-3.rtf  ONLY IN FOLDER 1 (no match)
+```
+
+Files that differ have their cell-level differences listed underneath; files present in only
+one folder (or that can't be read) are flagged rather than silently skipped. The full report
+is **archived automatically** inside the tool's `logs/reports/` folder (a `.txt` and a `.csv`),
+and you're also offered a **Save dialog** to keep your own copy wherever you like. The two
+folders must use **matching file names** for files to be paired.
+
+---
+
+## Audit log — proof of every run
+
+**Every** comparison you run — single-file *or* batch, **including runs that find no
+differences** — is appended to a timestamped audit log:
+
+```
+logs/audit_log.csv
+```
+
+One row per run records *when* it ran, *who* ran it, the files or folders compared, the result,
+and the counts (files compared / equivalent / differing / errors). Open it in **Excel** or
+**Numbers** to review, sort, or print it as evidence of the QC work performed and when.
+
+| Windows | Mac |
+|---|---|
+| Double-click **`windows\5-View-Audit-Log.bat`** | Double-click **`macos/5-View-Audit-Log.command`** |
+
+The audit log and the archived reports live **inside the tool folder** (`logs/`). See
+`logs/README.txt` for the column definitions.
+
+---
+
+## Keep the tool folder intact
+
+> ⚠️ **Do not move the R scripts or launchers out of the tool folder.** The tool writes its
+> **audit log** and **archived reports** to the `logs/` folder that sits next to the `R/`
+> folder. If you split the folder up, the tool can no longer find `logs/` and cannot save your
+> audit trail. Keep the whole folder together (you can put the *whole* folder anywhere — Desktop,
+> a network share, a USB drive — just don't take pieces out of it).
+
+---
 
 > **No admin rights / "Run anyway" is blocked (Windows):** that prompt is triggered because
 > downloaded files are "blocked". Clear it yourself without admin: right-click the **ZIP** →
@@ -215,7 +281,7 @@ After generating, compare `base` against `reformatted` (expect EQUIVALENT) and a
 
 ## Run the test suite
 
-A full automated suite (119 checks) verifies every part of the tool against small
+A full automated suite (171 checks) verifies every part of the tool against small
 hand-built fixtures, the large clinical example files, **and** real-world clinical
 outputs (see `tests/real_world/`).
 
@@ -227,11 +293,13 @@ outputs (see `tests/real_world/`).
 Rscript R/run_tests.R
 ```
 
-You should see `RESULT: 119 passed, 0 failed`. The suite covers parsing, normalisation,
+You should see `RESULT: 171 passed, 0 failed`. The suite covers parsing, normalisation,
 all five difference types, numeric tolerance, the report/CSV/exit codes, edge cases
 (byte-identical fast path, non-RTF input, trailing empty rows), a large-file performance
 check, the two key integration expectations (base↔reformatted EQUIVALENT;
-base↔changed = 7 differences), and real-world clinical files (`tests/real_world/`).
+base↔changed = 7 differences), real-world clinical files (`tests/real_world/`), the
+**batch folder comparison** (every file listed, including matches), and the **audit log**
+(every run recorded, including no-difference runs).
 
 ---
 
@@ -307,11 +375,13 @@ rtf-comparison-tool/
 │   ├── compare_rtf.R          ← the comparison engine + command-line interface
 │   ├── run_compare_paths.R    ← compare by pasting two file paths (default)
 │   ├── run_compare.R          ← point-and-click runner (file pickers, the "2b" option)
+│   ├── run_compare_folder.R   ← batch: compare two whole folders (the "2c" option)
 │   ├── install_packages.R     ← one-time package installer
 │   ├── generate_test_data.R   ← synthetic test-file generator (pure R)
 │   └── run_tests.R            ← runs the automated test suite
 ├── windows/                   ← double-click launchers for Windows (.bat)
 ├── macos/                     ← double-click launchers for macOS (.command)
+├── logs/                      ← audit_log.csv + archived reports (DO NOT MOVE — see logs/README.txt)
 ├── examples/                  ← provided clinical RTF files + their description
 ├── docs/                      ← the implementation specification
 └── tests/                     ← test suite, fixtures, and real-world tests

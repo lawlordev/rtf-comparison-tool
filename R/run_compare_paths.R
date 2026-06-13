@@ -30,6 +30,9 @@ if (!file.exists(engine)) engine <- file.path(getwd(), "compare_rtf.R")
 if (!file.exists(engine)) stop("Cannot find compare_rtf.R (expected in the R/ folder).", call. = FALSE)
 source(engine)
 
+# The tool root holds the logs/ folder (audit log). Keep the folder intact.
+root <- rtf_tool_root(script_dir)
+
 # --- read a line of input (works in the R console and under Rscript) ---------
 .stdin_con <- if (!interactive()) file("stdin", open = "r") else NULL
 ask <- function(msg) {
@@ -55,15 +58,19 @@ OPTS <- "num_tol=0, rel_tol=FALSE, trim=TRUE, collapse_space=TRUE, casefold=FALS
 # After showing results on screen, OFFER to export -- TXT (full report) and/or
 # CSV (the differences table) -- to a location the user types. Nothing is
 # written to disk unless requested.
+# Returns the paths actually written (character(0) if nothing was exported), so
+# the caller can record them in the audit log.
 export_flow <- function(res, f1, f2) {
+  saved <- character(0)
   if (isTRUE(res$equivalent))
     say("\n(No differences. You can still save the report as a QC record if you wish.)")
   choice <- tolower(clean_path(ask(
     "\nExport report?  [t] TXT   [c] CSV   [b] both   [Enter] skip : ")))
-  if (!nzchar(choice) || choice == "n") { say("Not exported."); return(invisible()) }
-  if (!choice %in% c("t", "c", "b")) { say("Unrecognised choice - not exported."); return(invisible()) }
-  if (choice %in% c("t", "b")) save_export(res, f1, f2, "txt")
-  if (choice %in% c("c", "b")) save_export(res, f1, f2, "csv")
+  if (!nzchar(choice) || choice == "n") { say("Not exported."); return(saved) }
+  if (!choice %in% c("t", "c", "b")) { say("Unrecognised choice - not exported."); return(saved) }
+  if (choice %in% c("t", "b")) saved <- c(saved, save_export(res, f1, f2, "txt"))
+  if (choice %in% c("c", "b")) saved <- c(saved, save_export(res, f1, f2, "csv"))
+  saved[nzchar(saved)]
 }
 
 save_export <- function(res, f1, f2, ext) {
@@ -73,7 +80,7 @@ save_export <- function(res, f1, f2, ext) {
                           format(Sys.time(), "%Y%m%d_%H%M%S"), ext)
   dest <- clean_path(ask(sprintf(
     "  Save %s as (type a full path, or a folder; Enter to skip): ", toupper(ext))))
-  if (!nzchar(dest)) { say("  (", toupper(ext), " skipped)"); return(invisible()) }
+  if (!nzchar(dest)) { say("  (", toupper(ext), " skipped)"); return("") }
   if (dir.exists(dest)) {
     path <- file.path(dest, default_name)                 # folder given -> default name
   } else {
@@ -81,13 +88,14 @@ save_export <- function(res, f1, f2, ext) {
     path <- dest
   }
   parent <- dirname(path)
-  if (!dir.exists(parent)) { say("  ERROR: folder does not exist: ", parent); return(invisible()) }
+  if (!dir.exists(parent)) { say("  ERROR: folder does not exist: ", parent); return("") }
   ok <- tryCatch({
     if (ext == "txt") write_report(res, f1, f2, txt_path = path, options_str = OPTS, console = FALSE)
     else              write_report(res, f1, f2, csv_path = path, console = FALSE)
     TRUE
   }, error = function(e) { say("  ERROR writing file: ", conditionMessage(e)); FALSE })
-  if (ok) say("  Saved: ", normalizePath(path, mustWork = FALSE))
+  if (ok) { path <- normalizePath(path, mustWork = FALSE); say("  Saved: ", path); return(path) }
+  ""
 }
 
 last_status <- 0L
@@ -120,7 +128,21 @@ repeat {
     } else {
       write_report(res, f1, f2, options_str = OPTS, console = TRUE)   # show results on screen
       last_status <- if (isTRUE(res$equivalent)) 0L else 1L
-      export_flow(res, f1, f2)                                        # offer to save (optional)
+      saved <- export_flow(res, f1, f2)                               # offer to save (optional)
+
+      # Record every comparison in the audit log -- including EQUIVALENT runs --
+      # so there is a permanent, timestamped record of the QC work performed.
+      result_str <- if (isTRUE(res$equivalent)) "EQUIVALENT"
+                    else sprintf("%d DIFFERENCE(S)", res$n_diffs)
+      audit_path <- tryCatch(
+        append_audit_log(root, "single", f1, f2, result_str,
+                         files_compared = 1L,
+                         files_equivalent = if (isTRUE(res$equivalent)) 1L else 0L,
+                         files_differing  = if (isTRUE(res$equivalent)) 0L else 1L,
+                         total_diffs = res$n_diffs,
+                         report_saved = paste(saved, collapse = "; ")),
+        error = function(e) { say("WARNING: could not update audit log: ", conditionMessage(e)); NA })
+      if (!is.na(audit_path)) say("Audit log updated: ", audit_path)
     }
   }
 
