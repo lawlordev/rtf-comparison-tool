@@ -222,6 +222,8 @@ run_diffdf_check <- function(base, comp, file = NULL) {
   ifelse(nchar(x) > n, paste0(substr(x, 1, n - 1L), "…"), x)
 }
 
+.diff_value <- function(x) ifelse(is.na(x), "<absent>", as.character(x))
+
 #' Format a difference table as aligned, fixed-width report lines.
 #'
 #' Shared by the single-file report (write_report) and the batch report
@@ -229,20 +231,22 @@ run_diffdf_check <- function(base, comp, file = NULL) {
 #' display width (not bytes) so columns line up even with multi-byte characters.
 #'
 #' @param d A diffs data.table (row_index, col_index, status, value_file1/2).
+#' @param truncate_values Shorten long values for compact console display.
 #' @return Character vector of report lines (empty if there are no differences).
-.format_diff_detail <- function(d) {
+.format_diff_detail <- function(d, truncate_values = FALSE) {
   if (is.null(d) || nrow(d) == 0L) return(character(0))
   padw <- function(x, n) {
     x <- as.character(x)
     paste0(x, strrep(" ", pmax(0L, n - nchar(x, type = "width"))))
   }
+  show_value <- if (truncate_values) .clip else .diff_value
   line <- function(a, b, c, e, f)
     paste(padw(a, 5L), padw(b, 5L), padw(c, 20L), padw(e, 39L), f)
   c(
     line("ROW", "COL", "STATUS", "FILE 1 VALUE", "FILE 2 VALUE"),
     vapply(seq_len(nrow(d)), function(i) line(
       d$row_index[i], d$col_index[i], d$status[i],
-      .clip(d$value_file1[i]), .clip(d$value_file2[i])), character(1))
+      show_value(d$value_file1[i]), show_value(d$value_file2[i])), character(1))
   )
 }
 
@@ -396,6 +400,30 @@ compare_rtf <- function(file1, file2,
 #'   summary is a data.table(file, status, n_cells, n_diffs, note) with one row
 #'   per file and results is a named list of the per-file compare_rtf() outputs
 #'   (only for files that were actually compared).
+.batch_file_key <- function(path) {
+  path <- gsub("\\\\", "/", enc2utf8(path))
+  parts <- strsplit(path, "/", fixed = TRUE)[[1]]
+  parts <- trimws(parts)
+  tolower(paste(parts, collapse = "/"))
+}
+
+.batch_file_index <- function(files, folder_label) {
+  .need_pkg("data.table")
+  keys <- vapply(files, .batch_file_key, character(1), USE.NAMES = FALSE)
+  idx <- data.table::data.table(norm_key = keys, file = files)
+  dup <- idx[, .N, by = norm_key][N > 1L]
+  if (nrow(dup) > 0L) {
+    bad <- idx[norm_key %in% dup$norm_key, paste(file, collapse = ", "), by = norm_key]
+    stop(sprintf(
+      "Ambiguous RTF file names in %s after case/spacing normalization: %s",
+      folder_label, paste(bad$V1, collapse = "; ")),
+      call. = FALSE)
+  }
+  out <- idx$file
+  names(out) <- idx$norm_key
+  out
+}
+
 compare_rtf_folder <- function(dir1, dir2,
                                trim = TRUE, collapse_space = TRUE, casefold = FALSE,
                                num_tol = 0, rel_tol = FALSE,
@@ -406,24 +434,32 @@ compare_rtf_folder <- function(dir1, dir2,
     if (!dir.exists(d)) stop(sprintf("Folder not found: '%s'", d), call. = FALSE)
   }
 
-  list_rtf <- function(d) list.files(d, pattern = "\\.rtf$", ignore.case = TRUE,
-                                     recursive = recursive, full.names = FALSE)
-  f1 <- list_rtf(dir1)
-  f2 <- list_rtf(dir2)
-  all_names <- sort(unique(c(f1, f2)))
+  list_rtf <- function(d) {
+    files <- list.files(d, recursive = recursive, full.names = FALSE)
+    is_rtf <- grepl("\\.rtf$", trimws(gsub("\\\\", "/", enc2utf8(files))),
+                    ignore.case = TRUE)
+    files <- files[is_rtf]
+    files[!file.info(file.path(d, files))$isdir]
+  }
+  f1 <- .batch_file_index(list_rtf(dir1), "folder 1")
+  f2 <- .batch_file_index(list_rtf(dir2), "folder 2")
+  all_keys <- sort(unique(c(names(f1), names(f2))))
 
-  if (length(all_names) == 0L) {
+  if (length(all_keys) == 0L) {
     stop(sprintf("No .rtf files found in either folder:\n  %s\n  %s", dir1, dir2),
          call. = FALSE)
   }
 
-  rows    <- vector("list", length(all_names))
+  rows    <- vector("list", length(all_keys))
   results <- list()
 
-  for (i in seq_along(all_names)) {
-    nm  <- all_names[[i]]
-    in1 <- nm %in% f1
-    in2 <- nm %in% f2
+  for (i in seq_along(all_keys)) {
+    key <- all_keys[[i]]
+    in1 <- key %in% names(f1)
+    in2 <- key %in% names(f2)
+    file1_name <- if (in1) unname(f1[[key]]) else NA_character_
+    file2_name <- if (in2) unname(f2[[key]]) else NA_character_
+    display_name <- if (in1) file1_name else file2_name
 
     if (in1 && !in2) {
       status <- "ONLY_IN_FOLDER1"; ncells <- NA_integer_; ndiffs <- NA_integer_
@@ -433,7 +469,7 @@ compare_rtf_folder <- function(dir1, dir2,
       note <- "No file of this name in folder 1"
     } else {
       res <- tryCatch(
-        compare_rtf(file.path(dir1, nm), file.path(dir2, nm),
+        compare_rtf(file.path(dir1, file1_name), file.path(dir2, file2_name),
                     trim = trim, collapse_space = collapse_space, casefold = casefold,
                     num_tol = num_tol, rel_tol = rel_tol, console = FALSE),
         error = function(e) e)
@@ -441,16 +477,20 @@ compare_rtf_folder <- function(dir1, dir2,
         status <- "ERROR"; ncells <- NA_integer_; ndiffs <- NA_integer_
         note <- conditionMessage(res)
       } else {
-        results[[nm]] <- res
+        results[[display_name]] <- res
         ncells <- res$n_cells; ndiffs <- res$n_diffs
         status <- if (isTRUE(res$equivalent)) "EQUIVALENT" else "DIFFERENCES"
-        note   <- ""
+        note   <- if (!identical(file1_name, file2_name)) {
+          sprintf("Matched to '%s' in folder 2 after filename normalization", file2_name)
+        } else {
+          ""
+        }
       }
     }
 
-    rows[[i]] <- data.frame(file = nm, status = status, n_cells = ncells,
+    rows[[i]] <- data.frame(file = display_name, status = status, n_cells = ncells,
                             n_diffs = ndiffs, note = note, stringsAsFactors = FALSE)
-    if (progress) cat(sprintf("  %-44s %s\n", nm,
+    if (progress) cat(sprintf("  %-44s %s\n", display_name,
                               if (status == "DIFFERENCES")
                                 sprintf("%d difference(s)", ndiffs) else status))
   }
@@ -482,8 +522,9 @@ compare_rtf_folder <- function(dir1, dir2,
 #' Write the batch comparison report (text and/or CSV).
 #'
 #' The text report lists EVERY file with its result (equivalent files included),
-#' then shows the cell-level differences for each file that differs. The CSV is
-#' the per-file summary table -- a machine-readable record of the whole run.
+#' then shows the cell-level differences for each file that differs. The CSV
+#' keeps the per-file summary columns and adds one untruncated row per
+#' cell-level difference so exported values can be copied in full.
 #'
 #' @param batch        Output of compare_rtf_folder().
 #' @param txt_path,csv_path  Optional output paths.
@@ -561,9 +602,37 @@ write_batch_report <- function(batch, txt_path = NULL, csv_path = NULL,
   if (!is.null(txt_path)) writeLines(enc2utf8(txt), txt_path, useBytes = TRUE)
   if (!is.null(csv_path)) {
     .need_pkg("data.table")
-    data.table::fwrite(s, csv_path)
+    data.table::fwrite(.batch_csv_rows(batch), csv_path)
   }
   invisible(txt)
+}
+
+.batch_csv_rows <- function(batch) {
+  .need_pkg("data.table")
+  s <- data.table::copy(batch$summary)
+  s[, `:=`(
+    row_index = NA_integer_,
+    col_index = NA_integer_,
+    diff_status = NA_character_,
+    value_file1 = NA_character_,
+    value_file2 = NA_character_
+  )]
+
+  out <- vector("list", nrow(batch$summary))
+  for (i in seq_len(nrow(batch$summary))) {
+    row <- s[i]
+    if (identical(row$status, "DIFFERENCES")) {
+      d <- data.table::copy(batch$results[[row$file]]$diffs)
+      data.table::setnames(d, "status", "diff_status")
+      d[, `:=`(file = row$file, status = row$status, n_cells = row$n_cells,
+               n_diffs = row$n_diffs, note = row$note)]
+      data.table::setcolorder(d, names(row))
+      out[[i]] <- d
+    } else {
+      out[[i]] <- row
+    }
+  }
+  data.table::rbindlist(out, use.names = TRUE)
 }
 
 # ============================================================================

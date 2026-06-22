@@ -11,6 +11,18 @@ new_pair <- function(tag) {
   list(d1 = d1, d2 = d2)
 }
 put <- function(dir, name, fixture) file.copy(fx(fixture), file.path(dir, name))
+write_one_cell_rtf <- function(path, value) {
+  lines <- c(
+    "{\\rtf1\\ansi\\ansicpg1252\\deff0",
+    "{\\fonttbl{\\f0\\fnil\\fcharset0 Courier New;}}",
+    "\\trowd\\trgaph108\\trleft0",
+    "\\cellx12000",
+    paste0("\\pard\\intbl\\plain\\f0\\fs18 ", value, "\\cell"),
+    "\\row",
+    "}"
+  )
+  writeLines(lines, path, useBytes = TRUE)
+}
 
 test_that("every file is reported, including ones with NO differences", {
   p <- new_pair("mixed")
@@ -58,6 +70,20 @@ test_that("all-matching folders report all_equivalent = TRUE", {
   expect_true(all(b$summary$status == "EQUIVALENT"))
 })
 
+test_that("batch pairing recognizes filenames with case and edge-space differences", {
+  p <- new_pair("normalized_names")
+  put(p$d1, " Patient Listing.RTF ", "identical_A.rtf")
+  put(p$d2, "patient listing.rtf", "identical_B.rtf")
+
+  b <- compare_rtf_folder(p$d1, p$d2, console = FALSE, progress = FALSE)
+
+  expect_true(b$all_equivalent)
+  expect_equal(nrow(b$summary), 1L)
+  expect_equal(b$summary$status, "EQUIVALENT")
+  expect_match(b$summary$note, "filename normalization")
+  expect_equal(b$totals$n_only1 + b$totals$n_only2, 0L)
+})
+
 test_that("an unreadable file becomes an ERROR row without aborting the batch", {
   p <- new_pair("err")
   put(p$d1, "ok.rtf",  "identical_A.rtf"); put(p$d2, "ok.rtf",  "identical_B.rtf")
@@ -98,7 +124,11 @@ test_that("write_batch_report lists every file (incl. equivalent) in TXT and CSV
 
   d <- data.table::fread(csv)
   expect_equal(sort(d$file), c("diff.rtf", "same.rtf"))              # both rows, match included
-  expect_equal(names(d), c("file", "status", "n_cells", "n_diffs", "note"))
+  expect_equal(names(d), c("file", "status", "n_cells", "n_diffs", "note",
+                           "row_index", "col_index", "diff_status",
+                           "value_file1", "value_file2"))
+  expect_equal(d$diff_status[d$file == "diff.rtf"], "VALUE_DIFF")
+  expect_true(is.na(d$value_file1[d$file == "same.rtf"]))
 })
 
 test_that("the folder runner writes an audit log + archived report end-to-end", {
@@ -131,4 +161,36 @@ test_that("the folder runner writes an audit log + archived report end-to-end", 
 
   reports <- list.files(file.path(troot, "logs", "reports"), pattern = "\\.txt$")
   expect_true(length(reports) >= 1L)
+})
+
+test_that("batch runner exports full difference values without ellipsis end-to-end", {
+  rscript <- file.path(R.home("bin"), "Rscript")
+  troot <- file.path(tempdir(), paste0("toolroot_long_", as.integer(runif(1, 1, 1e9))))
+  dir.create(file.path(troot, "R"), recursive = TRUE, showWarnings = FALSE)
+  file.copy(file.path(RTF_ROOT, "R", "compare_rtf.R"),        file.path(troot, "R"))
+  file.copy(file.path(RTF_ROOT, "R", "run_compare_folder.R"), file.path(troot, "R"))
+
+  p <- new_pair("runner_long")
+  long_a <- paste(rep("alpha-full-row-value", 12L), collapse = " ")
+  long_b <- paste(rep("beta-full-row-value", 12L), collapse = " ")
+  write_one_cell_rtf(file.path(p$d1, "Long Difference.RTF"), long_a)
+  write_one_cell_rtf(file.path(p$d2, "long difference.rtf"), long_b)
+
+  runner <- file.path(troot, "R", "run_compare_folder.R")
+  out <- suppressWarnings(system2(rscript, c(runner, p$d1, p$d2),
+                                  stdout = TRUE, stderr = TRUE))
+  st <- attr(out, "status"); if (is.null(st)) st <- 0L
+  expect_equal(as.integer(st), 1L)
+
+  report_dir <- file.path(troot, "logs", "reports")
+  txt <- file.path(report_dir, list.files(report_dir, pattern = "\\.txt$", full.names = FALSE)[[1]])
+  csv <- file.path(report_dir, list.files(report_dir, pattern = "\\.csv$", full.names = FALSE)[[1]])
+  text <- paste(readLines(txt, warn = FALSE), collapse = "\n")
+  d <- data.table::fread(csv)
+
+  expect_match(text, long_a, fixed = TRUE)
+  expect_match(text, long_b, fixed = TRUE)
+  expect_false(grepl(intToUtf8(8230L), text, fixed = TRUE))
+  expect_equal(d$value_file1[d$diff_status == "VALUE_DIFF"], long_a)
+  expect_equal(d$value_file2[d$diff_status == "VALUE_DIFF"], long_b)
 })
