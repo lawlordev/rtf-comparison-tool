@@ -20,6 +20,36 @@ test_that("write_report writes a readable text report", {
   expect_true(any(grepl("VALUE_DIFF", lines)))
 })
 
+test_that("write_report exports full values without ellipsis in TXT and CSV", {
+  long_a <- paste(rep("alpha-full-content", 12L), collapse = " ")
+  long_b <- paste(rep("beta-full-content", 12L), collapse = " ")
+  r <- list(
+    equivalent = FALSE,
+    n_cells = 1L,
+    n_diffs = 1L,
+    diffs = data.table::data.table(
+      row_index = 1L,
+      col_index = 1L,
+      status = "VALUE_DIFF",
+      value_file1 = long_a,
+      value_file2 = long_b
+    )
+  )
+
+  txt <- tempfile(fileext = ".txt")
+  csv <- tempfile(fileext = ".csv")
+  on.exit(unlink(c(txt, csv)), add = TRUE)
+  write_report(r, "a.rtf", "b.rtf", txt_path = txt, csv_path = csv, console = FALSE)
+
+  text <- paste(readLines(txt, warn = FALSE), collapse = "\n")
+  d <- data.table::fread(csv)
+  expect_match(text, long_a, fixed = TRUE)
+  expect_match(text, long_b, fixed = TRUE)
+  expect_false(grepl(intToUtf8(8230L), text, fixed = TRUE))
+  expect_equal(d$value_file1, long_a)
+  expect_equal(d$value_file2, long_b)
+})
+
 test_that("CLI exit code is 0 when files are equivalent", {
   r <- run_cli(c("--file1", fx("identical_A.rtf"), "--file2", fx("identical_B.rtf")))
   expect_equal(r$status, 0L)
